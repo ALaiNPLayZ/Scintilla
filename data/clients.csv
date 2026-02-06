@@ -1,0 +1,11 @@
+client_id,urgency_profile,preferred_algo,aggression_bias,participation_pref
+CLT001,balanced,VWAP,Medium,0.10
+CLT002,patient,VWAP,Low,0.08
+CLT003,aggressive,POV,High,0.15
+CLT004,balanced,POV,Medium,0.12
+CLT005,patient,ICEBERG,Low,0.05
+CLT006,aggressive,VWAP,High,0.20
+CLT007,balanced,ICEBERG,Medium,0.10
+CLT008,patient,VWAP,Low,0.06
+CLT009,aggressive,POV,High,0.18
+CLT010,balanced,VWAP,Medium,0.11

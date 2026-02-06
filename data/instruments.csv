@@ -1,0 +1,11 @@
+symbol,adv,volatility_bucket,liquidity_bucket
+AAPL,85000000,Low,High
+MSFT,72000000,Low,High
+GOOGL,28000000,Medium,High
+AMZN,45000000,Medium,High
+NVDA,95000000,High,High
+META,38000000,Medium,High
+TSLA,120000000,High,Medium
+JPM,15000000,Low,High
+XOM,22000000,Low,Medium
+SPY,180000000,Low,High

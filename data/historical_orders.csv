@@ -1,0 +1,16 @@
+client_id,symbol,size_bucket,volatility_bucket,algo_used,aggression_level
+CLT001,AAPL,small,Low,VWAP,Medium
+CLT001,MSFT,medium,Low,VWAP,Low
+CLT002,AAPL,small,Low,VWAP,Low
+CLT002,GOOGL,medium,Medium,VWAP,Low
+CLT003,NVDA,large,High,POV,High
+CLT003,TSLA,large,High,POV,High
+CLT004,MSFT,medium,Low,POV,Medium
+CLT004,AAPL,medium,Low,POV,Medium
+CLT005,AAPL,small,Low,ICEBERG,Low
+CLT005,JPM,small,Low,ICEBERG,Low
+CLT006,NVDA,medium,High,VWAP,High
+CLT007,META,medium,Medium,ICEBERG,Medium
+CLT008,SPY,small,Low,VWAP,Low
+CLT009,TSLA,large,High,POV,High
+CLT010,AAPL,medium,Low,VWAP,Medium
