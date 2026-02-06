@@ -42,8 +42,6 @@ def ebm_adjust_algo_scores(
     # In a production system, this is where EBM contributions per feature
     # would be added to the base_scores to produce adjusted_scores.
     adjusted_scores = dict(base_scores)
-    reasons = [
-        "EBM stub: rule-based algo scores used without ML adjustment (hook available for future EBM model)."
-    ]
+    reasons = []  # No user-facing message for stub
     return adjusted_scores, reasons
 

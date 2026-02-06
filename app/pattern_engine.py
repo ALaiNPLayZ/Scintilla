@@ -62,8 +62,8 @@ def match_historical(
 
     reasons = []
     if preferred_algo:
-        reasons.append(f"Client historically prefers {preferred_algo} (size bucket={bucket}, vol={volatility_bucket})")
+        reasons.append(f"Algo: {preferred_algo} (history)")
     if preferred_aggression:
-        reasons.append(f"Historical aggression for this context: {preferred_aggression}")
+        reasons.append(f"Aggression: {preferred_aggression} (history)")
 
     return preferred_algo, preferred_aggression, reasons

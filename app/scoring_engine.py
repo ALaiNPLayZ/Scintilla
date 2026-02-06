@@ -63,57 +63,57 @@ def score_algos(
 
     # --- Size vs ADV ---
     if size_vs_adv > 0.25:
-        bump("VWAP", 3, "Large order vs ADV; VWAP handles size efficiently")
-        bump("POV", 1, "Large order; POV participation can control footprint")
+        bump("VWAP", 3, "Algo: VWAP (large vs ADV)")
+        bump("POV", 1, "Algo: POV (large size, participation control)")
     elif size_vs_adv > 0.10:
-        bump("VWAP", 2, "Medium/large order size; VWAP suitable")
+        bump("VWAP", 2, "Algo: VWAP (size vs ADV)")
     else:
-        bump("POV", 1, "Small order size; POV remains flexible")
+        bump("POV", 1, "Algo: POV (small size)")
 
     # --- Urgency / time-to-close ---
     if urgency_level == "High" or eff_ttc <= 20:
-        bump("POV", 4, "High urgency / near close; POV favored to get done")
+        bump("POV", 4, "Algo: POV (urgency / near close)")
     elif urgency_level == "Medium":
-        bump("POV", 1.5, "Medium urgency; light tilt toward POV")
+        bump("POV", 1.5, "Algo: POV (urgency)")
     else:
-        bump("VWAP", 1, "Low urgency; VWAP acceptable for benchmark-style execution")
+        bump("VWAP", 1, "Algo: VWAP (low urgency)")
 
     if completion_required:
-        bump("POV", 3, "Order notes require completion by close; POV favored")
+        bump("POV", 3, "Algo: POV (completion by close)")
 
     # --- Volatility ---
     if volatility_bucket == "Low":
-        bump("VWAP", 2, "Low volatility; VWAP stable and benchmark-friendly")
+        bump("VWAP", 2, "Algo: VWAP (low vol)")
     elif volatility_bucket == "High":
-        bump("POV", 1.5, "High volatility; POV can react to volume")
-        bump("ICEBERG", 1.5, "High volatility; ICEBERG can hide size")
+        bump("POV", 1.5, "Algo: POV (high vol)")
+        bump("ICEBERG", 1.5, "Algo: ICEBERG (high vol, hide size)")
 
     # --- Liquidity ---
     if liquidity_bucket == "Low" or liquidity_score < 0.8:
-        bump("ICEBERG", 3, "Low liquidity; ICEBERG reduces market impact")
+        bump("ICEBERG", 3, "Algo: ICEBERG (low liquidity)")
     elif liquidity_bucket == "High" and liquidity_score > 1.2:
-        bump("POV", 1, "High liquidity; POV can safely participate aggressively")
+        bump("POV", 1, "Algo: POV (high liquidity)")
 
     # --- Notes-based intents ---
     if benchmark_type == "VWAP":
-        bump("VWAP", 5, "Notes specify VWAP benchmark; VWAP strongly preferred")
+        bump("VWAP", 5, "Algo: VWAP (notes benchmark)")
     elif benchmark_type == "ARRIVAL":
-        bump("POV", 2, "Notes reference arrival price; POV aligns with participation around arrival")
+        bump("POV", 2, "Algo: POV (arrival benchmark)")
 
     if market_impact_sensitive:
-        bump("ICEBERG", 3, "Notes request to minimize market impact; ICEBERG favored")
-        bump("VWAP", 1, "Impact-sensitive; VWAP is more passive than aggressive POV")
+        bump("ICEBERG", 3, "Algo: ICEBERG (min impact)")
+        bump("VWAP", 1, "Algo: VWAP (passive)")
 
     if aggression_pref == "HIGH":
-        bump("POV", 2, "Notes prefer higher aggression; POV prioritized")
+        bump("POV", 2, "Algo: POV (aggressive)")
     elif aggression_pref == "LOW":
-        bump("VWAP", 1.5, "Low aggression preference; VWAP more passive")
-        bump("ICEBERG", 1.0, "Low aggression preference; ICEBERG hides size")
+        bump("VWAP", 1.5, "Algo: VWAP (passive)")
+        bump("ICEBERG", 1.0, "Algo: ICEBERG (passive)")
 
     # --- Rule override: if rule engine forced an algo, it wins ---
     if rule_algo and rule_algo in ALGOS:
         chosen = rule_algo
-        score_reasons = ["Algo forced by hard rule engine"] + reasons_by_algo.get(chosen, [])
+        score_reasons = [f"Algo: {rule_algo} (rule override)"] + reasons_by_algo.get(chosen, [])
         return chosen, _dedupe(score_reasons)
 
     # --- Optional EBM stub for ML-based adjustment (currently no-op) ---
@@ -127,13 +127,11 @@ def score_algos(
     score_reasons = reasons_by_algo.get(chosen, [])
 
     if pattern_algo and pattern_algo in ALGOS and scores[pattern_algo] >= best_score - 1:
-        # Historical preference nudges the winner if it's close.
         chosen = pattern_algo
         score_reasons = reasons_by_algo.get(chosen, []) + [
-            f"Historical preference lightly boosted {chosen} over other candidates"
+            f"Algo: {chosen} (historical preference)"
         ]
 
-    # Include generic EBM stub explanation once for the chosen algo, if present.
     score_reasons = _dedupe(score_reasons + ebm_reasons)
     return chosen, score_reasons
 

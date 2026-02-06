@@ -38,36 +38,36 @@ def apply_rules(context: Dict[str, Any]) -> Dict[str, Any]:
     # Rule: explicit VWAP benchmark in notes or flags -> force VWAP
     if notes_flags.get("vwap") or notes_intents.get("benchmark_type") == "VWAP":
         algo = "VWAP"
-        reasons.append("Notes specify VWAP benchmark; algo forced to VWAP")
+        reasons.append("Algo: VWAP (notes benchmark)")
 
     # Rule: completion required by close -> prefer POV and higher aggression
     if notes_intents.get("completion_required"):
         if algo is None:
             algo = "POV"
-            reasons.append("Order must complete by close; algo forced to POV")
+            reasons.append("Algo: POV (must complete by close)")
         aggression = "High"
-        reasons.append("Completion requirement: aggression forced to High")
+        reasons.append("Aggression: High (completion required)")
 
     # Rule: time_to_close high-urgency -> aggression HIGH
     if urgency_level == "High" and aggression is None:
         aggression = "High"
-        reasons.append("High urgency from time-to-close; aggression set to High")
+        reasons.append("Aggression: High (urgency)")
 
     # Rule: order > 25% ADV -> avoid Market order (prefer Limit)
     if size_vs_adv > 0.25:
         order_type = "Limit"
-        reasons.append("Order size > 25% ADV; avoiding Market order (using Limit)")
+        reasons.append("Order type: Limit (>25% ADV)")
 
     # Rule: very low liquidity and impact-sensitive notes -> avoid Market
     if notes_intents.get("market_impact_sensitive") and liquidity_bucket == "Low":
         if order_type != "Limit":
             order_type = "Limit"
-        reasons.append("Impact-sensitive in low liquidity; Market orders disallowed (Limit only)")
+        reasons.append("Order type: Limit (impact-sensitive, thin liquidity)")
 
     # Rule: urgency EOD (High) -> prefer POV (only if algo not already set)
     if urgency_level == "High" and algo is None:
         algo = "POV"
-        reasons.append("End-of-day urgency; defaulting to POV")
+        reasons.append("Algo: POV (EOD urgency)")
 
     result: Dict[str, Any] = {"reasons": reasons}
     if algo is not None:

@@ -11,13 +11,35 @@ All explanations are deterministic and ordered by importance.
 from typing import Dict, Any, List
 
 
-def _dedupe(seq: List[str]) -> List[str]:
-    seen = set()
+def _consolidate_by_param(explanations: List[str]) -> List[str]:
+    """
+    Merge lines with same parameter prefix (e.g. "Algo:") into one short line.
+    Keeps explanations trader-friendly and concise.
+    """
+    by_prefix: Dict[str, List[str]] = {}
+    standalone: List[str] = []
+
+    for s in explanations:
+        if not s or not s.strip():
+            continue
+        if ": " in s:
+            prefix, rest = s.split(": ", 1)
+            key = prefix.strip()
+            if key not in by_prefix:
+                by_prefix[key] = []
+            by_prefix[key].append(rest.strip())
+        else:
+            standalone.append(s)
+
     out: List[str] = []
-    for s in seq:
-        if s and s not in seen:
-            seen.add(s)
-            out.append(s)
+    for s in standalone:
+        out.append(s)
+
+    # Emit one line per parameter; use final reason (last wins for overrides)
+    for prefix, parts in by_prefix.items():
+        final = parts[-1] if parts else ""
+        out.append(f"{prefix}: {final}")
+
     return out
 
 
@@ -40,48 +62,30 @@ def build_explanations(
     size_vs_adv = context.get("size_vs_adv", 0.0)
     notes_intents = context.get("notes_intents") or {}
 
-    # 1) Always mention size vs ADV
+    # 1) Size context (trader keyword)
     pct = round(size_vs_adv * 100, 0)
-    explanations.append(f"Order size is {int(pct)}% of ADV")
+    explanations.append(f"Size: {int(pct)}% ADV")
 
-    # Fat-finger quantity check (read-only warning)
+    # Fat-finger quantity check
     if context.get("fat_finger_flag"):
-        tol = context.get("historical_tolerance_ratio")
-        if tol:
-            explanations.append(
-                f"Quantity breaches historical size tolerance (~{tol*100:.0f}% of ADV); flagging potential fat-finger"
-            )
-        else:
-            explanations.append("Quantity is unusually large relative to historical patterns; flagging potential fat-finger")
+        explanations.append("Quantity: fat-finger check flag")
 
-    # Notes-derived intents (high-level drivers)
-    benchmark_type = notes_intents.get("benchmark_type")
-    if benchmark_type == "VWAP":
-        explanations.append("Order notes specify a VWAP benchmark")
-    elif benchmark_type == "ARRIVAL":
-        explanations.append("Order notes specify an arrival-price benchmark")
-
-    if notes_intents.get("completion_required"):
-        explanations.append("Order must complete by close as indicated in notes")
-
-    if notes_intents.get("market_impact_sensitive"):
-        explanations.append("Order notes request minimising market impact")
-
-    # 2) Algo scoring reasons (already target-specific)
+    # 2) Algo scoring
     for r in score_reasons:
         explanations.append(r)
 
-    # 3) Parameter / field resolution (order type, limit, POV/VWAP/ICEBERG params)
+    # 3) Parameter / field resolution
     for r in param_reasons:
         explanations.append(r)
 
-    # 4) Historical / pattern reasons
+    # 4) Historical
     for r in pattern_reasons:
         explanations.append(r)
 
-    # 5) Rule reasons (e.g. "Notes specify VWAP", "Order size > 25% ADV...")
+    # 5) Rules
     for r in rule_reasons:
         explanations.append(r)
 
-    return _dedupe(explanations)
+    # Consolidate by param (last reason wins); skip dedupe so rule overrides stay last
+    return _consolidate_by_param(explanations)
 

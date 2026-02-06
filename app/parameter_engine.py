@@ -148,17 +148,17 @@ def build_core_fields(
 
     if rule_order_type:
         order_type = rule_order_type
-        reasons.append(f"Order type forced to {order_type} by hard rule engine")
+        reasons.append(f"Order type: {order_type} (rule)")
     else:
         if "stop" in (request.notes or "").lower():
             order_type = "Stop"
-            reasons.append("Order notes contain 'stop'; defaulting to Stop order type")
+            reasons.append("Order type: Stop (notes)")
         elif urgency == "High" and liquidity_bucket in ("High", "Medium") and spread <= 0.10:
             order_type = "Market"
-            reasons.append("High urgency, good liquidity, tight spread; Market order is acceptable")
+            reasons.append("Order type: Market (urgency, liquidity)")
         else:
             order_type = "Limit"
-            reasons.append("Using Limit order to control price given current urgency and liquidity")
+            reasons.append("Order type: Limit")
 
     # 2) Limit Price (for Limit/Stop)
     limit_price: Optional[float] = None
@@ -171,9 +171,7 @@ def build_core_fields(
             spread=spread,
         )
         if limit_price is not None:
-            reasons.append(
-                f"Limit price set using bid/ask protection band around market ({request.direction} side)"
-            )
+            reasons.append("Limit: bid/ask band")
 
     # 3) Start / End time and TIF
     now = _synthetic_market_now()
@@ -197,7 +195,7 @@ def build_core_fields(
     end_time_str = end_dt.strftime("%H:%M")
 
     tif = _tif_from_window(effective_ttc)
-    reasons.append(f"Execution window ~{window_minutes} minutes; TIF set to {tif}")
+    reasons.append(f"TIF: {tif} ({window_minutes}m window)")
 
     core = CoreOrderFields(
         order_type=order_type,
@@ -246,28 +244,25 @@ def build_algo_parameters(
     reasons: List[str] = []
 
     # --- Aggression resolution ---
-    # Start from trader profile, then override with notes, then urgency.
     aggression = client.get("aggression_bias", "Medium") or "Medium"
-    reasons.append(f"Aggression base from client profile: {aggression}")
 
     if notes_intents.get("aggression_preference") == "HIGH":
         aggression = "High"
-        reasons.append("Order notes request higher aggression; overriding profile to High")
+        reasons.append("Aggression: High (notes)")
     elif notes_intents.get("aggression_preference") == "LOW":
         aggression = "Low"
-        reasons.append("Order notes request lower aggression; overriding profile to Low")
+        reasons.append("Aggression: Low (notes)")
 
     if urgency == "High" and aggression != "High":
         aggression = "High"
-        reasons.append("High urgency upgraded aggression to High")
+        reasons.append("Aggression: High (urgency)")
 
-    # Hard rule / pattern wins last (highest priority)
     if pattern_aggression:
         aggression = pattern_aggression
-        reasons.append(f"Historical aggression pattern applied: {pattern_aggression}")
+        reasons.append(f"Aggression: {pattern_aggression} (history)")
     if rule_aggression:
         aggression = rule_aggression
-        reasons.append(f"Aggression forced by rule engine: {rule_aggression}")
+        reasons.append(f"Aggression: {rule_aggression} (rule)")
 
     # Defaults (non-algo-specific)
     participation_rate = None
@@ -282,39 +277,31 @@ def build_algo_parameters(
         base = float(client.get("participation_pref", 0.10))
         if notes_intents.get("benchmark_type") == "ARRIVAL":
             base = min(base + 0.02, 0.30)
-            reasons.append("Arrival-price benchmark: POV participation nudged higher")
         if urgency == "High":
             base = min(0.30, base + 0.05)
-            reasons.append("High urgency: POV participation bumped up")
         if notes_intents.get("market_impact_sensitive"):
             base = max(0.05, base - 0.03)
-            reasons.append("Impact-sensitive: POV participation reduced slightly")
         participation_rate = round(base, 2)
+        pct = int(participation_rate * 100)
+        reasons.append(f"POV participation: {pct}%")
 
         avg_trade = max(last_trade_size, 100)
         min_clip_size = max(1, int(avg_trade * 0.5))
         max_clip_size = int(avg_trade * 2)
-        reasons.append(
-            f"POV clip sizes derived from average trade size ~{avg_trade} (min≈0.5x, max≈2x)"
-        )
+        reasons.append(f"POV clips: {min_clip_size}–{max_clip_size} (vs avg trade)")
 
     # --- VWAP parameters ---
     elif chosen_algo == "VWAP":
-        # Curve: notes or urgency decide front-loading.
         if notes_intents.get("benchmark_type") == "VWAP":
             volume_curve = "Historical"
-            reasons.append("VWAP benchmark: using historical volume curve")
         elif urgency == "High":
             volume_curve = "Front-loaded"
-            reasons.append("High urgency: VWAP curve front-loaded toward open of window")
         else:
             volume_curve = "Historical"
-            reasons.append("Neutral urgency: VWAP curve based on historical profile")
+        reasons.append(f"VWAP curve: {volume_curve}")
 
         max_volume_pct = 20.0 if volatility_bucket == "High" else 15.0
-        reasons.append(
-            f"VWAP max % of volume set to {max_volume_pct}% based on volatility bucket {volatility_bucket}"
-        )
+        reasons.append(f"VWAP max vol: {int(max_volume_pct)}%")
 
     # --- ICEBERG parameters ---
     elif chosen_algo == "ICEBERG":
@@ -324,12 +311,7 @@ def build_algo_parameters(
 
         if notes_intents.get("market_impact_sensitive"):
             display_quantity = max(1, int(display_quantity * 0.7))
-            reasons.append("Impact-sensitive: ICEBERG display quantity scaled down")
-
-        reasons.append(
-            "ICEBERG display quantity set as min(2% ADV, 10% of order size), "
-            "optionally reduced for impact-sensitive notes"
-        )
+        reasons.append(f"ICEBERG display: {display_quantity}")
 
     algo_params = AlgoParameters(
         participation_rate=participation_rate,
