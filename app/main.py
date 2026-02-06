@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .models import OrderRequest, RecommendationResponse, CoreOrderFields, AlgoParameters, ContextFlags
-from .data_loader import load_all_data, get_historical_data
+from .data_loader import load_all_data
 from .context_builder import build_context
 from .rule_engine import apply_rules, RULE_ALGO, RULE_AGGRESSION, RULE_ORDER_TYPE, RULE_REASONS
 from .pattern_engine import match_historical
@@ -67,19 +67,26 @@ def run_recommend_pipeline(request: OrderRequest) -> RecommendationResponse:
     )
 
     # 5. Scoring: choose final algo (rules override, then pattern tie-break, then scores)
-    chosen_algo = score_algos(context, rule_algo=rule_algo, pattern_algo=pattern_algo)
+    chosen_algo, score_reasons = score_algos(context, rule_algo=rule_algo, pattern_algo=pattern_algo)
 
-    # 6. Core fields and algo parameters
-    core_fields = build_core_fields(context, chosen_algo, rule_order_type=rule_order_type)
-    algo_params = build_algo_parameters(
+    # 6. Core fields and algo parameters (with their own reasons)
+    core_fields, core_reasons = build_core_fields(context, chosen_algo, rule_order_type=rule_order_type)
+    algo_params, algo_param_reasons = build_algo_parameters(
         context,
         chosen_algo,
         rule_aggression=rule_aggression,
         pattern_aggression=pattern_aggression,
     )
 
-    # 7. Explanations
-    explanations = build_explanations(context, rule_reasons, pattern_reasons, chosen_algo)
+    # 7. Explanations (rules + patterns + scoring + parameter resolution)
+    param_reasons = core_reasons + algo_param_reasons
+    explanations = build_explanations(
+        context=context,
+        rule_reasons=rule_reasons,
+        pattern_reasons=pattern_reasons,
+        score_reasons=score_reasons,
+        param_reasons=param_reasons,
+    )
 
     # 8. Context flags for response transparency
     context_flags = ContextFlags(
@@ -88,6 +95,13 @@ def run_recommend_pipeline(request: OrderRequest) -> RecommendationResponse:
         volatility_bucket=context["volatility_bucket"],
         liquidity_bucket=context["liquidity_bucket"],
         spread=context["spread"],
+        intraday_vol=float(context.get("intraday_vol", 0.0)),
+        avg_trade_size=float((context.get("market_snapshot") or {}).get("last_trade_size", 0)),
+        liquidity_score=float(context.get("liquidity_score", 0.0)),
+        time_to_close_request=int(context.get("time_to_close_request", request.time_to_close)),
+        time_to_close_system=int(context.get("time_to_close_system", context.get("time_to_close_request", 0))),
+        effective_time_to_close=int(context.get("effective_time_to_close", request.time_to_close)),
+        fat_finger_flag=bool(context.get("fat_finger_flag", False)),
     )
 
     return RecommendationResponse(

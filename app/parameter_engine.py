@@ -1,9 +1,17 @@
 """
 SmartOrder AI - Generate core order fields and algo-specific parameters
 from chosen algo, context, rule overrides, and market data.
+
+This module focuses on:
+- Deterministic, market-aware order type and limit price logic
+- Time window and TIF selection
+- Impact-sensitive display quantity
+- Rule-based POV/VWAP/ICEBERG parameter resolution
+
+Each decision also emits human-readable explanation strings.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
 from .models import CoreOrderFields, AlgoParameters
@@ -14,63 +22,193 @@ def _now_time_str() -> str:
     return datetime.now().strftime("%H:%M")
 
 
-def _end_time_from_urgency(time_to_close: int, urgency: str) -> str:
-    """End time: approximate from time_to_close. Simple mock: 16:00 - minutes or fixed windows."""
+def _synthetic_market_now() -> datetime:
+    """
+    Return a "market-session" timestamp for realistic ticket times.
+
+    Hackathon-friendly behavior:
+    - If your system clock is outside typical market hours, we clamp to a
+      reasonable intraday time (10:00).
+    - This avoids start/end being identical (or looking like 19:30) during demos.
+    """
+    now = datetime.now().replace(second=0, microsecond=0)
+    open_t = now.replace(hour=9, minute=30)
+    close_t = now.replace(hour=15, minute=55)
+    if now < open_t or now > close_t:
+        return now.replace(hour=10, minute=0)
+    return now
+
+
+def _end_time_from_urgency(effective_minutes_to_close: int, urgency: str) -> str:
+    """
+    End time: approximate the execution window.
+
+    For simplicity we keep everything inside the trading day, but
+    compress or extend based on urgency and time to close.
+    """
+    # Assume a 16:00 close; don't exceed that.
+    now = datetime.now()
     if urgency == "High":
-        # EOD -> 15:55
-        return "15:55"
-    if urgency == "Medium":
-        return "14:30"
-    return "16:00"
+        # Finish close to the bell
+        target_minutes = min(effective_minutes_to_close, 30)
+    elif urgency == "Medium":
+        target_minutes = min(effective_minutes_to_close, 90)
+    else:
+        target_minutes = min(effective_minutes_to_close, 240)
+
+    end_dt = now.replace(second=0, microsecond=0) + timedelta(minutes=target_minutes)
+    return end_dt.strftime("%H:%M")
+
+
+def _tif_from_window(effective_minutes_to_close: int) -> str:
+    """
+    Time-in-force derived from how much time is realistically available.
+    """
+    if effective_minutes_to_close <= 5:
+        return "IOC"
+    # For intraday algo-style orders, DAY is a reasonable default.
+    return "DAY"
+
+
+def _protection_banded_limit_price(
+    direction: str,
+    bid: Optional[float],
+    ask: Optional[float],
+    ltp: Optional[float],
+    spread: float,
+) -> Optional[float]:
+    """
+    Compute a passive limit price using bid/ask references and simple
+    buy/sell protection bands.
+
+    - For BUY: aim inside the spread but never far through the ask.
+    - For SELL: aim inside the spread but never far through the bid.
+    """
+    if not ltp and bid is None and ask is None:
+        return None
+
+    if bid is None and ask is not None:
+        bid = ask - spread
+    if ask is None and bid is not None:
+        ask = bid + spread
+
+    bid = float(bid or ltp or 0.0)
+    ask = float(ask or ltp or 0.0)
+    spread = float(spread or max(ask - bid, 0.01))
+
+    mid = (bid + ask) / 2.0
+
+    if direction.lower() == "buy":
+        # Slightly passive inside the spread for buys.
+        limit = bid + 0.25 * spread
+        # Do not cross more than one spread through the ask.
+        upper_band = ask + spread
+        return round(min(limit, upper_band), 2)
+    else:
+        # For sells, lean inside the spread toward the bid.
+        limit = ask - 0.25 * spread
+        lower_band = bid - spread
+        return round(max(limit, lower_band), 2)
 
 
 def build_core_fields(
     context: Dict[str, Any],
     chosen_algo: str,
     rule_order_type: Optional[str] = None,
-) -> CoreOrderFields:
+) -> Tuple[CoreOrderFields, List[str]]:
     """
     Core order fields:
-    - order_type = Market if urgency high & liquid; else Limit (or from rule).
-    - limit_price = LTP ± 0.1% if passive (Limit).
-    - start_time = now, end_time from urgency / time_to_close.
+    - Order Type (Market / Limit / Stop) from urgency, liquidity, notes, and price protection.
+    - Limit Price using bid/ask reference and buy/sell protection bands.
+    - Start / End time from urgency and time-to-close.
+    - TIF derived from execution window length.
+
+    Returns:
+        (CoreOrderFields, explanation_reasons)
     """
+    from datetime import timedelta  # local import to avoid polluting module namespace
+
     request = context["request"]
     market = context.get("market_snapshot") or {}
-    ltp = market.get("ltp", 0.0)
-    urgency = context.get("urgency_level", "Medium")
-    liquidity = context.get("liquidity_bucket", "Medium")
-    time_to_close = request.time_to_close
+    notes_intents = context.get("notes_intents") or {}
 
-    # Order type: rule override, else Market only if high urgency and liquid
+    ltp = context.get("ltp", market.get("ltp"))
+    bid = context.get("bid", market.get("bid"))
+    ask = context.get("ask", market.get("ask"))
+    spread = float(context.get("spread", market.get("spread", 0.0)))
+
+    urgency = context.get("urgency_level", "Medium")
+    liquidity_bucket = context.get("liquidity_bucket", "Medium")
+    effective_ttc = int(context.get("effective_time_to_close", request.time_to_close))
+
+    reasons: List[str] = []
+
+    # 1) Order Type
+    order_type = "Limit"
+
     if rule_order_type:
         order_type = rule_order_type
-    elif urgency == "High" and liquidity in ("High", "Medium"):
-        order_type = "Market"
+        reasons.append(f"Order type forced to {order_type} by hard rule engine")
     else:
-        order_type = "Limit"
-
-    # Limit price: LTP ± 0.1% for passive (Buy: LTP - 0.1%, Sell: LTP + 0.1%)
-    limit_price = None
-    if order_type == "Limit" and ltp:
-        pct = 0.001
-        if request.direction.lower() == "buy":
-            limit_price = round(ltp * (1 - pct), 2)
+        if "stop" in (request.notes or "").lower():
+            order_type = "Stop"
+            reasons.append("Order notes contain 'stop'; defaulting to Stop order type")
+        elif urgency == "High" and liquidity_bucket in ("High", "Medium") and spread <= 0.10:
+            order_type = "Market"
+            reasons.append("High urgency, good liquidity, tight spread; Market order is acceptable")
         else:
-            limit_price = round(ltp * (1 + pct), 2)
+            order_type = "Limit"
+            reasons.append("Using Limit order to control price given current urgency and liquidity")
 
-    start_time = _now_time_str()
-    end_time = _end_time_from_urgency(time_to_close, urgency)
+    # 2) Limit Price (for Limit/Stop)
+    limit_price: Optional[float] = None
+    if order_type in ("Limit", "Stop"):
+        limit_price = _protection_banded_limit_price(
+            direction=request.direction,
+            bid=bid,
+            ask=ask,
+            ltp=ltp,
+            spread=spread,
+        )
+        if limit_price is not None:
+            reasons.append(
+                f"Limit price set using bid/ask protection band around market ({request.direction} side)"
+            )
 
-    return CoreOrderFields(
+    # 3) Start / End time and TIF
+    now = _synthetic_market_now()
+    start_time_str = now.strftime("%H:%M")
+    if urgency == "High":
+        window_minutes = min(effective_ttc, 30)
+    elif urgency == "Medium":
+        window_minutes = min(effective_ttc, 90)
+    else:
+        window_minutes = min(effective_ttc, 240)
+
+    # Ensure a non-zero realistic window for algos unless the trader explicitly provided 0.
+    if effective_ttc > 0 and window_minutes < 10:
+        window_minutes = min(effective_ttc, 10)
+
+    end_dt = now + timedelta(minutes=window_minutes)
+    # Keep inside the synthetic trading day (15:59 cap)
+    day_cap = now.replace(hour=15, minute=59)
+    if end_dt > day_cap:
+        end_dt = day_cap
+    end_time_str = end_dt.strftime("%H:%M")
+
+    tif = _tif_from_window(effective_ttc)
+    reasons.append(f"Execution window ~{window_minutes} minutes; TIF set to {tif}")
+
+    core = CoreOrderFields(
         order_type=order_type,
         limit_price=limit_price,
         direction=request.direction,
-        time_in_force="DAY",
-        start_time=start_time,
-        end_time=end_time,
+        time_in_force=tif,
+        start_time=start_time_str,
+        end_time=end_time_str,
         algo_type=chosen_algo,
     )
+    return core, reasons
 
 
 def build_algo_parameters(
@@ -78,26 +216,58 @@ def build_algo_parameters(
     chosen_algo: str,
     rule_aggression: Optional[str] = None,
     pattern_aggression: Optional[str] = None,
-) -> AlgoParameters:
+) -> Tuple[AlgoParameters, List[str]]:
     """
     Algo-specific parameters:
-    - POV: participation_rate (client pref + urgency), min/max clip from avg trade size.
-    - VWAP: volume_curve (historical or front-loaded), max_volume_pct (20% high vol, else 15%).
-    - ICEBERG: display_quantity = min(2% ADV, 10% order size).
-    Aggression: rule > pattern > client bias.
+    - POV: % of volume, Min/Max order, Aggression Level.
+    - VWAP: volume curve, Max % volume, Aggression Level, urgency, Get Done flag.
+    - ICEBERG: display quantity, Aggression Level.
+
+    Resolution priority:
+    1) Order notes intents
+    2) Trader/client profile (synthetic clients.csv)
+    3) Market urgency (time-to-close)
+
+    Returns:
+        (AlgoParameters, explanation_reasons)
     """
     request = context["request"]
     client = context.get("client_profile") or {}
     instrument = context.get("instrument_profile") or {}
     market = context.get("market_snapshot") or {}
+    notes_intents = context.get("notes_intents") or {}
+
     urgency = context.get("urgency_level", "Medium")
     volatility_bucket = context.get("volatility_bucket", "Medium")
     adv = instrument.get("adv", 1)
     order_size = request.order_size
     last_trade_size = market.get("last_trade_size", 500)
 
-    # Aggression: rule override > pattern > client bias > default Medium
-    aggression = rule_aggression or pattern_aggression or client.get("aggression_bias", "Medium") or "Medium"
+    reasons: List[str] = []
+
+    # --- Aggression resolution ---
+    # Start from trader profile, then override with notes, then urgency.
+    aggression = client.get("aggression_bias", "Medium") or "Medium"
+    reasons.append(f"Aggression base from client profile: {aggression}")
+
+    if notes_intents.get("aggression_preference") == "HIGH":
+        aggression = "High"
+        reasons.append("Order notes request higher aggression; overriding profile to High")
+    elif notes_intents.get("aggression_preference") == "LOW":
+        aggression = "Low"
+        reasons.append("Order notes request lower aggression; overriding profile to Low")
+
+    if urgency == "High" and aggression != "High":
+        aggression = "High"
+        reasons.append("High urgency upgraded aggression to High")
+
+    # Hard rule / pattern wins last (highest priority)
+    if pattern_aggression:
+        aggression = pattern_aggression
+        reasons.append(f"Historical aggression pattern applied: {pattern_aggression}")
+    if rule_aggression:
+        aggression = rule_aggression
+        reasons.append(f"Aggression forced by rule engine: {rule_aggression}")
 
     # Defaults (non-algo-specific)
     participation_rate = None
@@ -107,28 +277,61 @@ def build_algo_parameters(
     max_volume_pct = None
     display_quantity = None
 
+    # --- POV parameters ---
     if chosen_algo == "POV":
-        # participation_rate from client pref + urgency bump
         base = float(client.get("participation_pref", 0.10))
+        if notes_intents.get("benchmark_type") == "ARRIVAL":
+            base = min(base + 0.02, 0.30)
+            reasons.append("Arrival-price benchmark: POV participation nudged higher")
         if urgency == "High":
-            base = min(0.25, base + 0.05)
+            base = min(0.30, base + 0.05)
+            reasons.append("High urgency: POV participation bumped up")
+        if notes_intents.get("market_impact_sensitive"):
+            base = max(0.05, base - 0.03)
+            reasons.append("Impact-sensitive: POV participation reduced slightly")
         participation_rate = round(base, 2)
-        # Clips relative to avg trade size (use last_trade_size as proxy)
+
         avg_trade = max(last_trade_size, 100)
         min_clip_size = max(1, int(avg_trade * 0.5))
         max_clip_size = int(avg_trade * 2)
+        reasons.append(
+            f"POV clip sizes derived from average trade size ~{avg_trade} (min≈0.5x, max≈2x)"
+        )
 
+    # --- VWAP parameters ---
     elif chosen_algo == "VWAP":
-        volume_curve = "Front-loaded" if urgency == "High" else "Historical"
-        max_volume_pct = 20.0 if volatility_bucket == "High" else 15.0
+        # Curve: notes or urgency decide front-loading.
+        if notes_intents.get("benchmark_type") == "VWAP":
+            volume_curve = "Historical"
+            reasons.append("VWAP benchmark: using historical volume curve")
+        elif urgency == "High":
+            volume_curve = "Front-loaded"
+            reasons.append("High urgency: VWAP curve front-loaded toward open of window")
+        else:
+            volume_curve = "Historical"
+            reasons.append("Neutral urgency: VWAP curve based on historical profile")
 
+        max_volume_pct = 20.0 if volatility_bucket == "High" else 15.0
+        reasons.append(
+            f"VWAP max % of volume set to {max_volume_pct}% based on volatility bucket {volatility_bucket}"
+        )
+
+    # --- ICEBERG parameters ---
     elif chosen_algo == "ICEBERG":
-        # display_quantity = min(2% ADV, 10% order size)
         pct_adv = max(1, int(adv * 0.02))
         pct_order = max(1, int(order_size * 0.10))
         display_quantity = min(pct_adv, pct_order)
 
-    return AlgoParameters(
+        if notes_intents.get("market_impact_sensitive"):
+            display_quantity = max(1, int(display_quantity * 0.7))
+            reasons.append("Impact-sensitive: ICEBERG display quantity scaled down")
+
+        reasons.append(
+            "ICEBERG display quantity set as min(2% ADV, 10% of order size), "
+            "optionally reduced for impact-sensitive notes"
+        )
+
+    algo_params = AlgoParameters(
         participation_rate=participation_rate,
         min_clip_size=min_clip_size,
         max_clip_size=max_clip_size,
@@ -137,3 +340,5 @@ def build_algo_parameters(
         display_quantity=display_quantity,
         aggression_level=aggression,
     )
+    return algo_params, reasons
+

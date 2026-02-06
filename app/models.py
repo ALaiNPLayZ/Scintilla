@@ -60,6 +60,27 @@ class ContextFlags(BaseModel):
     volatility_bucket: str = Field(..., description="Low, Medium, High")
     liquidity_bucket: str = Field(..., description="Low, Medium, High")
     spread: float = Field(..., description="Current bid-ask spread")
+    intraday_vol: Optional[float] = Field(
+        None, description="Numeric intraday volatility used for market-aware decisions"
+    )
+    avg_trade_size: Optional[float] = Field(
+        None, description="Average trade size proxy from synthetic market data"
+    )
+    liquidity_score: Optional[float] = Field(
+        None, description="Synthetic liquidity proxy combining ADV, spread, and trade size"
+    )
+    time_to_close_request: Optional[int] = Field(
+        None, description="Minutes to close supplied in the order request"
+    )
+    time_to_close_system: Optional[int] = Field(
+        None, description="Minutes to close derived from the system clock"
+    )
+    effective_time_to_close: Optional[int] = Field(
+        None, description="Effective time to close used in decision logic (min of request/system)"
+    )
+    fat_finger_flag: Optional[bool] = Field(
+        None, description="True if order size breaches historical size tolerance heuristic"
+    )
 
 
 class RecommendationResponse(BaseModel):
