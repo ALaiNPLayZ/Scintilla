@@ -250,7 +250,7 @@ st.markdown(
   div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
   label { margin-bottom: 0.15rem !important; }
   .stCaption { margin-top: -0.3rem; font-size: 0.82rem; }
-  .prefill-yellow-strip { background: #fffde7; border-radius: 3px; min-height: 2rem; }
+  .suggested-label { background: #b8860b; color: #ffffff; padding: 2px 6px; border-radius: 3px; font-size: 0.9rem; display: inline-block; margin-bottom: 0.15rem; }
   button[kind="primary"] { background-color: #1E88E5 !important; }
   h1 { font-size: 1.5rem !important; margin-top: 0.25rem !important; margin-bottom: 0.05rem !important; }
   h2 { font-size: 1.2rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
@@ -368,41 +368,29 @@ with ticket_col:
 
     with c5:
         if _is_suggested("order_type"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.selectbox("Order Type", options=ORDER_TYPES, key="order_type", on_change=_mark_override, args=("order_type",))
+            st.markdown('<span class="suggested-label">Order Type</span>', unsafe_allow_html=True)
+            st.selectbox("Order Type", options=ORDER_TYPES, key="order_type", on_change=_mark_override, args=("order_type",), label_visibility="collapsed")
         else:
             st.selectbox("Order Type", options=ORDER_TYPES, key="order_type", on_change=_mark_override, args=("order_type",))
 
     with c6:
         if _is_suggested("limit_price"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.number_input("Limit Price", min_value=0.0, step=0.01, format="%.2f", key="limit_price", on_change=_mark_override, args=("limit_price",))
+            st.markdown('<span class="suggested-label">Limit Price</span>', unsafe_allow_html=True)
+            st.number_input("Limit Price", min_value=0.0, step=0.01, format="%.2f", key="limit_price", on_change=_mark_override, args=("limit_price",), label_visibility="collapsed")
         else:
             st.number_input("Limit Price", min_value=0.0, step=0.01, format="%.2f", key="limit_price", on_change=_mark_override, args=("limit_price",))
 
     with c7:
         if _is_suggested("time_in_force"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.selectbox("TIF", options=TIFS, key="time_in_force", on_change=_mark_override, args=("time_in_force",))
+            st.markdown('<span class="suggested-label">TIF</span>', unsafe_allow_html=True)
+            st.selectbox("TIF", options=TIFS, key="time_in_force", on_change=_mark_override, args=("time_in_force",), label_visibility="collapsed")
         else:
             st.selectbox("TIF", options=TIFS, key="time_in_force", on_change=_mark_override, args=("time_in_force",))
 
     with c8:
         if _is_suggested("display_qty_core"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.number_input("Display Qty", min_value=0, step=100, key="display_qty_core", on_change=_mark_override, args=("display_qty_core",))
+            st.markdown('<span class="suggested-label">Display Qty</span>', unsafe_allow_html=True)
+            st.number_input("Display Qty", min_value=0, step=100, key="display_qty_core", on_change=_mark_override, args=("display_qty_core",), label_visibility="collapsed")
         else:
             st.number_input("Display Qty", min_value=0, step=100, key="display_qty_core", on_change=_mark_override, args=("display_qty_core",))
 
@@ -459,41 +447,29 @@ with ticket_col:
 
     # -------- SECTION 3 — Algo Selection & Timing --------
     st.subheader("🟦 Algo Selection & Timing")
-    a1, a2, a3, a4, a5 = st.columns([1.4, 1.4, 1.0, 1.1, 1.1], gap="small")
+    a1, a2, a3, a4 = st.columns([1.4, 1.0, 1.1, 1.1], gap="small")
 
     with a1:
-        st.text_input("Service", value="SmartOrder AI", disabled=True)
-
-    with a2:
         if _is_suggested("algo_type"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.selectbox("Executor / Algo Type", options=ALGOS, key="algo_type", on_change=_mark_override, args=("algo_type",))
+            st.markdown('<span class="suggested-label">Executor / Algo Type</span>', unsafe_allow_html=True)
+            st.selectbox("Executor / Algo Type", options=ALGOS, key="algo_type", on_change=_mark_override, args=("algo_type",), label_visibility="collapsed")
         else:
             st.selectbox("Executor / Algo Type", options=ALGOS, key="algo_type", on_change=_mark_override, args=("algo_type",))
 
-    with a3:
+    with a2:
         st.selectbox("Hold", options=["No", "Yes"], key="hold", on_change=_mark_override, args=("hold",))
 
-    with a4:
+    with a3:
         if _is_suggested("start_time"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.time_input("Start Time", key="start_time", on_change=_mark_override, args=("start_time",))
+            st.markdown('<span class="suggested-label">Start Time</span>', unsafe_allow_html=True)
+            st.time_input("Start Time", key="start_time", on_change=_mark_override, args=("start_time",), label_visibility="collapsed")
         else:
             st.time_input("Start Time", key="start_time", on_change=_mark_override, args=("start_time",))
 
-    with a5:
+    with a4:
         if _is_suggested("end_time"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.time_input("End Time", key="end_time", on_change=_mark_override, args=("end_time",))
+            st.markdown('<span class="suggested-label">End Time</span>', unsafe_allow_html=True)
+            st.time_input("End Time", key="end_time", on_change=_mark_override, args=("end_time",), label_visibility="collapsed")
         else:
             st.time_input("End Time", key="end_time", on_change=_mark_override, args=("end_time",))
 
@@ -506,11 +482,8 @@ with ticket_col:
     p_shared1, p_shared2 = st.columns([1.2, 1.2], gap="small")
     with p_shared1:
         if _is_suggested("aggression_level"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.selectbox("Aggression Level", options=AGGRESSION_LEVELS, key="aggression_level", on_change=_mark_override, args=("aggression_level",))
+            st.markdown('<span class="suggested-label">Aggression Level</span>', unsafe_allow_html=True)
+            st.selectbox("Aggression Level", options=AGGRESSION_LEVELS, key="aggression_level", on_change=_mark_override, args=("aggression_level",), label_visibility="collapsed")
         else:
             st.selectbox("Aggression Level", options=AGGRESSION_LEVELS, key="aggression_level", on_change=_mark_override, args=("aggression_level",))
     with p_shared2:
@@ -529,20 +502,14 @@ with ticket_col:
         v1, v2 = st.columns([1.2, 1.2], gap="small")
         with v1:
             if _is_suggested("vwap_volume_curve"):
-                _s, _m = st.columns([0.06, 0.94])
-                with _s:
-                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-                with _m:
-                    st.selectbox("Volume Curve", options=VWAP_CURVES, key="vwap_volume_curve", on_change=_mark_override, args=("vwap_volume_curve",))
+                st.markdown('<span class="suggested-label">Volume Curve</span>', unsafe_allow_html=True)
+                st.selectbox("Volume Curve", options=VWAP_CURVES, key="vwap_volume_curve", on_change=_mark_override, args=("vwap_volume_curve",), label_visibility="collapsed")
             else:
                 st.selectbox("Volume Curve", options=VWAP_CURVES, key="vwap_volume_curve", on_change=_mark_override, args=("vwap_volume_curve",))
         with v2:
             if _is_suggested("vwap_max_volume_pct"):
-                _s, _m = st.columns([0.06, 0.94])
-                with _s:
-                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-                with _m:
-                    st.number_input("Max % of Volume", min_value=0.0, max_value=100.0, step=1.0, key="vwap_max_volume_pct", on_change=_mark_override, args=("vwap_max_volume_pct",))
+                st.markdown('<span class="suggested-label">Max % of Volume</span>', unsafe_allow_html=True)
+                st.number_input("Max % of Volume", min_value=0.0, max_value=100.0, step=1.0, key="vwap_max_volume_pct", on_change=_mark_override, args=("vwap_max_volume_pct",), label_visibility="collapsed")
             else:
                 st.number_input("Max % of Volume", min_value=0.0, max_value=100.0, step=1.0, key="vwap_max_volume_pct", on_change=_mark_override, args=("vwap_max_volume_pct",))
 
@@ -550,39 +517,27 @@ with ticket_col:
         p1, p2, p3 = st.columns([1.2, 1.2, 1.2], gap="small")
         with p1:
             if _is_suggested("pov_participation_rate"):
-                _s, _m = st.columns([0.06, 0.94])
-                with _s:
-                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-                with _m:
-                    st.number_input("Target Participation %", min_value=0.0, max_value=1.0, step=0.01, format="%.2f", key="pov_participation_rate", on_change=_mark_override, args=("pov_participation_rate",))
+                st.markdown('<span class="suggested-label">Target Participation %</span>', unsafe_allow_html=True)
+                st.number_input("Target Participation %", min_value=0.0, max_value=1.0, step=0.01, format="%.2f", key="pov_participation_rate", on_change=_mark_override, args=("pov_participation_rate",), label_visibility="collapsed")
             else:
                 st.number_input("Target Participation %", min_value=0.0, max_value=1.0, step=0.01, format="%.2f", key="pov_participation_rate", on_change=_mark_override, args=("pov_participation_rate",))
         with p2:
             if _is_suggested("pov_min_clip"):
-                _s, _m = st.columns([0.06, 0.94])
-                with _s:
-                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-                with _m:
-                    st.number_input("Min Clip Qty", min_value=0, step=100, key="pov_min_clip", on_change=_mark_override, args=("pov_min_clip",))
+                st.markdown('<span class="suggested-label">Min Clip Qty</span>', unsafe_allow_html=True)
+                st.number_input("Min Clip Qty", min_value=0, step=100, key="pov_min_clip", on_change=_mark_override, args=("pov_min_clip",), label_visibility="collapsed")
             else:
                 st.number_input("Min Clip Qty", min_value=0, step=100, key="pov_min_clip", on_change=_mark_override, args=("pov_min_clip",))
         with p3:
             if _is_suggested("pov_max_clip"):
-                _s, _m = st.columns([0.06, 0.94])
-                with _s:
-                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-                with _m:
-                    st.number_input("Max Clip Qty", min_value=0, step=100, key="pov_max_clip", on_change=_mark_override, args=("pov_max_clip",))
+                st.markdown('<span class="suggested-label">Max Clip Qty</span>', unsafe_allow_html=True)
+                st.number_input("Max Clip Qty", min_value=0, step=100, key="pov_max_clip", on_change=_mark_override, args=("pov_max_clip",), label_visibility="collapsed")
             else:
                 st.number_input("Max Clip Qty", min_value=0, step=100, key="pov_max_clip", on_change=_mark_override, args=("pov_max_clip",))
 
     elif chosen_algo_ui == "ICEBERG":
         if _is_suggested("iceberg_display_quantity"):
-            _s, _m = st.columns([0.06, 0.94])
-            with _s:
-                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
-            with _m:
-                st.number_input("Display Quantity", min_value=0, step=100, key="iceberg_display_quantity", on_change=_mark_override, args=("iceberg_display_quantity",))
+            st.markdown('<span class="suggested-label">Display Quantity</span>', unsafe_allow_html=True)
+            st.number_input("Display Quantity", min_value=0, step=100, key="iceberg_display_quantity", on_change=_mark_override, args=("iceberg_display_quantity",), label_visibility="collapsed")
         else:
             st.number_input("Display Quantity", min_value=0, step=100, key="iceberg_display_quantity", on_change=_mark_override, args=("iceberg_display_quantity",))
 
