@@ -251,7 +251,33 @@ st.markdown(
   label { margin-bottom: 0.15rem !important; }
   .stCaption { margin-top: -0.3rem; font-size: 0.82rem; }
   .suggested-label { background: #b8860b; color: #ffffff; padding: 2px 6px; border-radius: 3px; font-size: 0.9rem; display: inline-block; margin-bottom: 0.15rem; }
-  button[kind="primary"] { background-color: #1E88E5 !important; }
+  button[kind="primary"],
+  button[kind="primary"]:focus,
+  button[kind="primary"]:focus-visible,
+  button[kind="primary"]:active {
+    background-color: #1E88E5 !important;
+    outline: none !important;
+    outline-width: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  div[data-testid="stButton"] > button[kind="primary"]:focus,
+  div[data-testid="stButton"] > button[kind="primary"]:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  /* Remove focus ring from any element (Streamlit sometimes puts it on wrapper) */
+  [data-testid="stButton"]:focus,
+  [data-testid="stButton"]:focus-within {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  [data-testid="stButton"]:focus-within button {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
   h1 { font-size: 1.5rem !important; margin-top: 0.25rem !important; margin-bottom: 0.05rem !important; }
   h2 { font-size: 1.2rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
   h3 { font-size: 1.0rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
@@ -405,16 +431,13 @@ with ticket_col:
 
     status_msg = st.session_state.get("last_prefill_msg")
     status_ok = st.session_state.get("last_prefill_ok")
-    if status_msg:
+    if status_msg and not status_ok:
         esc = html.escape(status_msg)
-        if status_ok:
-            st.markdown('<p style="color: #2e7d32; font-size: 0.8rem; margin: 0.15rem 0;">' + esc + '</p>', unsafe_allow_html=True)
-        else:
-            st.markdown('<p style="color: #e65100; font-size: 0.8rem; margin: 0.15rem 0;">' + esc + '</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color: #e65100; font-size: 0.8rem; margin: 0.15rem 0;">' + esc + '</p>', unsafe_allow_html=True)
 
     if clear:
         reset_prefill_state()
-        st.markdown('<p style="color: #2e7d32; font-size: 0.8rem; margin: 0.15rem 0;">Cleared AI-prefill state. All fields remain as you set them.</p>', unsafe_allow_html=True)
+        st.rerun()
 
     if generate:
         payload = {
