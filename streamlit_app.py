@@ -243,7 +243,7 @@ st.set_page_config(page_title="SmartOrder AI - Order Ticket", layout="wide")
 st.markdown(
     """
 <style>
-  .block-container { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  .block-container { padding-top: 2rem; padding-bottom: 0.5rem; }
   div[data-testid="stVerticalBlock"] div:has(> div[data-testid="stForm"]) { gap: 0.2rem; }
   label { margin-bottom: 0.1rem !important; }
   .stCaption { margin-top: -0.35rem; font-size: 0.85rem; }
@@ -260,7 +260,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("SmartOrder AI – Order Ticket")
+st.title("suggestION")
 st.caption("Use Fill All to prefill from AI, then override as needed.")
 
 
