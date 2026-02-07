@@ -239,22 +239,23 @@ def reset_prefill_state() -> None:
 
 st.set_page_config(page_title="suggestION", layout="wide")
 
-# Compact layout and yellow highlight for AI-prefilled fields
+# Compact layout and yellow highlight for AI-prefilled fields (single-screen, no scroll)
 st.markdown(
     """
 <style>
-  .block-container { padding-top: 2rem; padding-bottom: 0.5rem; }
-  div[data-testid="stVerticalBlock"] div:has(> div[data-testid="stForm"]) { gap: 0.2rem; }
-  label { margin-bottom: 0.1rem !important; }
-  .stCaption { margin-top: -0.35rem; font-size: 0.85rem; }
-  /* Yellow strip column for prefilled fields */
-  .prefill-yellow-strip { background: #fffde7; border-radius: 3px; min-height: 2.2rem; }
-  /* Primary button blue */
+  .block-container { padding-top: 2rem; padding-bottom: 0.35rem; }
+  div[data-testid="stVerticalBlock"] { gap: 0.35rem !important; }
+  div[data-testid="stVerticalBlock"] div:has(> div[data-testid="stForm"]) { gap: 0.25rem !important; }
+  div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
+  label { margin-bottom: 0.15rem !important; }
+  .stCaption { margin-top: -0.3rem; font-size: 0.82rem; }
+  .prefill-yellow-strip { background: #fffde7; border-radius: 3px; min-height: 2rem; }
   button[kind="primary"] { background-color: #1E88E5 !important; }
-  /* Smaller headings */
-  h1 { font-size: 1.5rem !important; margin-top: 0.3rem !important; margin-bottom: 0.2rem !important; }
-  h2 { font-size: 1.2rem !important; margin-top: 0.3rem !important; margin-bottom: 0.2rem !important; }
-  h3 { font-size: 1.0rem !important; margin-top: 0.3rem !important; margin-bottom: 0.2rem !important; }
+  h1 { font-size: 1.5rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
+  h2 { font-size: 1.2rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
+  h3 { font-size: 1.0rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
+  hr { margin: 0.35rem 0 !important; }
+  [data-testid="stExpander"] { margin: 0.2rem 0 !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -328,7 +329,7 @@ if pending_resp is not None:
 # -----------------------------
 
 
-ticket_col, explain_col = st.columns([3.2, 1.3], gap="large")
+ticket_col, explain_col = st.columns([3.2, 1.3], gap="medium")
 
 
 with ticket_col:
@@ -448,7 +449,7 @@ with ticket_col:
 
     # -------- SECTION 2 — Order Notes --------
     st.subheader("🟦 Order Notes")
-    st.text_area("Order Notes", key="notes", height=35, on_change=_mark_override, args=("notes",))
+    st.text_area("Order Notes", key="notes", height=30, on_change=_mark_override, args=("notes",))
 
     st.divider()
 
