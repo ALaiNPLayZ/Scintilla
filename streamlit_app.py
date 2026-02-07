@@ -252,7 +252,7 @@ st.markdown(
   .stCaption { margin-top: -0.3rem; font-size: 0.82rem; }
   .prefill-yellow-strip { background: #fffde7; border-radius: 3px; min-height: 2rem; }
   button[kind="primary"] { background-color: #1E88E5 !important; }
-  h1 { font-size: 1.5rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
+  h1 { font-size: 1.5rem !important; margin-top: 0.25rem !important; margin-bottom: 0.05rem !important; }
   h2 { font-size: 1.2rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
   h3 { font-size: 1.0rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
   hr { margin: 0.35rem 0 !important; }
