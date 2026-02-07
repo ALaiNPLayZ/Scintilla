@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from typing import Any, Dict, List, Optional
 
+import html
 import requests
 import streamlit as st
 import pandas as pd
@@ -333,14 +334,6 @@ ticket_col, explain_col = st.columns([3.2, 1.3], gap="medium")
 
 
 with ticket_col:
-    status_msg = st.session_state.get("last_prefill_msg")
-    status_ok = st.session_state.get("last_prefill_ok")
-    if status_msg:
-        if status_ok:
-            st.success(status_msg)
-        else:
-            st.warning(status_msg)
-
     # -------- SECTION 1 — Core Order Entry (Top) --------
     st.subheader("🟦 Core Order Entry")
 
@@ -420,9 +413,18 @@ with ticket_col:
     with b3:
         st.number_input("Minutes to Close", min_value=0, step=5, key="time_to_close", on_change=_mark_override, args=("time_to_close",))
 
+    status_msg = st.session_state.get("last_prefill_msg")
+    status_ok = st.session_state.get("last_prefill_ok")
+    if status_msg:
+        esc = html.escape(status_msg)
+        if status_ok:
+            st.markdown('<p style="color: #2e7d32; font-size: 0.8rem; margin: 0.15rem 0;">' + esc + '</p>', unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="color: #e65100; font-size: 0.8rem; margin: 0.15rem 0;">' + esc + '</p>', unsafe_allow_html=True)
+
     if clear:
         reset_prefill_state()
-        st.success("Cleared AI-prefill state. All fields remain as you set them.")
+        st.markdown('<p style="color: #2e7d32; font-size: 0.8rem; margin: 0.15rem 0;">Cleared AI-prefill state. All fields remain as you set them.</p>', unsafe_allow_html=True)
 
     if generate:
         payload = {
@@ -449,7 +451,7 @@ with ticket_col:
 
     # -------- SECTION 2 — Order Notes --------
     st.subheader("🟦 Order Notes")
-    st.text_area("Order Notes", key="notes", height=30, on_change=_mark_override, args=("notes",))
+    st.text_area("Order Notes", key="notes", height=22, on_change=_mark_override, args=("notes",))
 
     st.divider()
 
