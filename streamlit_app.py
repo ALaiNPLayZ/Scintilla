@@ -244,7 +244,7 @@ st.set_page_config(page_title="suggestION", layout="wide")
 st.markdown(
     """
 <style>
-  .block-container { padding-top: 2rem; padding-bottom: 0.35rem; }
+  .block-container { padding-top: 2rem; padding-bottom: 0.35rem; max-width: 98% !important; padding-left: 2rem !important; padding-right: 2rem !important; }
   div[data-testid="stVerticalBlock"] { gap: 0.35rem !important; }
   div[data-testid="stVerticalBlock"] div:has(> div[data-testid="stForm"]) { gap: 0.25rem !important; }
   div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
@@ -453,7 +453,7 @@ with ticket_col:
 
     # -------- SECTION 2 — Order Notes --------
     st.subheader("🟦 Order Notes")
-    st.text_area("Order Notes", key="notes", height=10, on_change=_mark_override, args=("notes",))
+    st.text_area("Order Notes", key="notes", height=10, on_change=_mark_override, args=("notes",), label_visibility="collapsed")
 
     st.divider()
 
