@@ -237,7 +237,7 @@ def reset_prefill_state() -> None:
 # -----------------------------
 
 
-st.set_page_config(page_title="SmartOrder AI - Order Ticket", layout="wide")
+st.set_page_config(page_title="suggestION", layout="wide")
 
 # Compact layout and yellow highlight for AI-prefilled fields
 st.markdown(
@@ -261,7 +261,6 @@ st.markdown(
 )
 
 st.title("suggestION")
-st.caption("Use Fill All to prefill from AI, then override as needed.")
 
 
 # -----------------------------
