@@ -257,6 +257,8 @@ st.markdown(
   h3 { font-size: 1.0rem !important; margin-top: 0.25rem !important; margin-bottom: 0.2rem !important; }
   hr { margin: 0.35rem 0 !important; }
   [data-testid="stExpander"] { margin: 0.2rem 0 !important; }
+  /* Force Order Notes text area smaller (Streamlit enforces min ~98px otherwise) */
+  div[data-testid="stTextArea"] textarea { height: 52px !important; min-height: 52px !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -451,7 +453,7 @@ with ticket_col:
 
     # -------- SECTION 2 — Order Notes --------
     st.subheader("🟦 Order Notes")
-    st.text_area("Order Notes", key="notes", height=22, on_change=_mark_override, args=("notes",))
+    st.text_area("Order Notes", key="notes", height=10, on_change=_mark_override, args=("notes",))
 
     st.divider()
 
