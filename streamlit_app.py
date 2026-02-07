@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 import streamlit as st
+import pandas as pd
+from pathlib import Path
 
 
 # -----------------------------
@@ -118,16 +120,14 @@ def _set_field_if_not_overridden(key: str, value: Any) -> None:
 
 
 def _set_suggested(key: str, value: Any) -> None:
-    """Store AI-suggested value separately (for display/debug)."""
+    """Store AI-suggested value for yellow-highlight styling."""
     suggested: Dict[str, Any] = st.session_state.setdefault("suggested", {})
     suggested[key] = value
 
 
-def _suggested_badge(key: str) -> str:
-    """Subtle label suffix to indicate the field can be AI-prefilled."""
-    # We keep this subtle (no color blocks), but consistent.
-    suggested = st.session_state.get("suggested", {})
-    return " • Suggested" if key in suggested else ""
+def _is_suggested(key: str) -> bool:
+    """True if this field was AI-prefilled (yellow strip indicator)."""
+    return key in st.session_state.get("suggested", {})
 
 
 # -----------------------------
@@ -239,27 +239,29 @@ def reset_prefill_state() -> None:
 
 st.set_page_config(page_title="SmartOrder AI - Order Ticket", layout="wide")
 
-# Minimal enterprise-neutral tweaks (no external styling frameworks)
+# Compact layout and yellow highlight for AI-prefilled fields
 st.markdown(
     """
 <style>
-  /* Make the UI denser (more OMS-like) */
-  .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-  div[data-testid="stVerticalBlock"] div:has(> div[data-testid="stForm"]) { gap: 0.4rem; }
-  /* Slightly reduce label spacing */
-  label { margin-bottom: 0.15rem !important; }
-  /* Tighten captions */
-  .stCaption { margin-top: -0.25rem; }
+  .block-container { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  div[data-testid="stVerticalBlock"] div:has(> div[data-testid="stForm"]) { gap: 0.2rem; }
+  label { margin-bottom: 0.1rem !important; }
+  .stCaption { margin-top: -0.35rem; font-size: 0.85rem; }
+  /* Yellow strip column for prefilled fields */
+  .prefill-yellow-strip { background: #fffde7; border-radius: 3px; min-height: 2.2rem; }
+  /* Primary button blue */
+  button[kind="primary"] { background-color: #1E88E5 !important; }
+  /* Smaller headings */
+  h1 { font-size: 1.5rem !important; margin-top: 0.3rem !important; margin-bottom: 0.2rem !important; }
+  h2 { font-size: 1.2rem !important; margin-top: 0.3rem !important; margin-bottom: 0.2rem !important; }
+  h3 { font-size: 1.0rem !important; margin-top: 0.3rem !important; margin-bottom: 0.2rem !important; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-st.title("SmartOrder AI – Intelligent Order Ticket Prefill")
-st.caption(
-    "Generate AI-prefilled suggestions, then freely override any field. "
-    "This is a mock prototype (no external integrations)."
-)
+st.title("SmartOrder AI – Order Ticket")
+st.caption("Use Fill All to prefill from AI, then override as needed.")
 
 
 # -----------------------------
@@ -276,6 +278,10 @@ _ss_get("pending_api_response", None)
 _ss_get("last_prefill_ok", None)
 _ss_get("last_prefill_msg", "")
 
+# Market data cache: only refresh when symbol changes (not on Fill All rerun)
+_ss_get("market_data_symbol", None)
+_ss_get("market_data_cache", None)
+
 # Core trader-entered inputs (request)
 _ss_get("client_id", MOCK_CLIENTS[0])
 _ss_get("direction", "Buy")
@@ -289,9 +295,6 @@ _ss_get("order_type", "Limit")
 _ss_get("limit_price", None)  # float or None
 _ss_get("time_in_force", "DAY")
 _ss_get("display_qty_core", None)  # optional "Display Qty" at top
-
-_ss_get("instructions", "")
-_ss_get("flags", [])
 
 _ss_get("algo_type", "VWAP")
 _ss_get("hold", "No")
@@ -340,7 +343,6 @@ with ticket_col:
 
     # -------- SECTION 1 — Core Order Entry (Top) --------
     st.subheader("🟦 Core Order Entry")
-    st.caption("Compact institutional-style ticket entry. Fields marked “Suggested” may be AI-prefilled.")
 
     c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.1, 0.8, 1.0, 1.0, 1.0, 1.0, 0.9, 0.9], gap="small")
 
@@ -370,62 +372,53 @@ with ticket_col:
         st.text_input("Symbol", key="symbol", on_change=_mark_override, args=("symbol",))
 
     with c5:
-        st.selectbox(
-            f"Order Type{_suggested_badge('order_type')}",
-            options=ORDER_TYPES,
-            key="order_type",
-            on_change=_mark_override,
-            args=("order_type",),
-        )
+        if _is_suggested("order_type"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.selectbox("Order Type", options=ORDER_TYPES, key="order_type", on_change=_mark_override, args=("order_type",))
+        else:
+            st.selectbox("Order Type", options=ORDER_TYPES, key="order_type", on_change=_mark_override, args=("order_type",))
 
     with c6:
-        st.number_input(
-            f"Limit Price{_suggested_badge('limit_price')}",
-            min_value=0.0,
-            step=0.01,
-            format="%.2f",
-            key="limit_price",
-            on_change=_mark_override,
-            args=("limit_price",),
-            help="AI may suggest a passive limit around LTP; you can override any time.",
-        )
+        if _is_suggested("limit_price"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.number_input("Limit Price", min_value=0.0, step=0.01, format="%.2f", key="limit_price", on_change=_mark_override, args=("limit_price",))
+        else:
+            st.number_input("Limit Price", min_value=0.0, step=0.01, format="%.2f", key="limit_price", on_change=_mark_override, args=("limit_price",))
 
     with c7:
-        st.selectbox(
-            f"TIF{_suggested_badge('time_in_force')}",
-            options=TIFS,
-            key="time_in_force",
-            on_change=_mark_override,
-            args=("time_in_force",),
-        )
+        if _is_suggested("time_in_force"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.selectbox("TIF", options=TIFS, key="time_in_force", on_change=_mark_override, args=("time_in_force",))
+        else:
+            st.selectbox("TIF", options=TIFS, key="time_in_force", on_change=_mark_override, args=("time_in_force",))
 
     with c8:
-        st.number_input(
-            f"Display Qty{_suggested_badge('iceberg_display_quantity')}",
-            min_value=0,
-            step=100,
-            key="display_qty_core",
-            on_change=_mark_override,
-            args=("display_qty_core",),
-            help="Optional. For ICEBERG you may prefer using the ICEBERG Display Quantity below.",
-        )
+        if _is_suggested("display_qty_core"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.number_input("Display Qty", min_value=0, step=100, key="display_qty_core", on_change=_mark_override, args=("display_qty_core",))
+        else:
+            st.number_input("Display Qty", min_value=0, step=100, key="display_qty_core", on_change=_mark_override, args=("display_qty_core",))
 
     # Prefill action row
     b1, b2, b3, _sp = st.columns([1.2, 1.2, 1.6, 5.0], gap="small")
     with b1:
-        generate = st.button("Generate Smart Prefill", type="primary", use_container_width=True)
+        generate = st.button("Fill All", type="primary", use_container_width=True)
     with b2:
         clear = st.button("Clear Prefill", use_container_width=True)
     with b3:
-        st.number_input(
-            "Minutes to Close",
-            min_value=0,
-            step=5,
-            key="time_to_close",
-            on_change=_mark_override,
-            args=("time_to_close",),
-            help="Used by SmartOrder AI to infer urgency and time window.",
-        )
+        st.number_input("Minutes to Close", min_value=0, step=5, key="time_to_close", on_change=_mark_override, args=("time_to_close",))
 
     if clear:
         reset_prefill_state()
@@ -454,28 +447,9 @@ with ticket_col:
 
     st.divider()
 
-    # -------- SECTION 2 — Order Notes & Instructions --------
-    st.subheader("🟦 Order Notes & Instructions")
-    n1, n2, n3 = st.columns([2.2, 1.2, 1.6], gap="small")
-    with n1:
-        st.text_area(
-            "Order Notes",
-            key="notes",
-            height=90,
-            on_change=_mark_override,
-            args=("notes",),
-            help='Free text. Keywords like "VWAP", "urgent", "benchmark" can influence suggestions.',
-        )
-    with n2:
-        st.text_input("Instructions (optional)", key="instructions", on_change=_mark_override, args=("instructions",))
-    with n3:
-        st.multiselect(
-            "Flags (optional)",
-            options=["Benchmark", "NoCross", "MinImpact", "Urgent", "Careful"],
-            key="flags",
-            on_change=_mark_override,
-            args=("flags",),
-        )
+    # -------- SECTION 2 — Order Notes --------
+    st.subheader("🟦 Order Notes")
+    st.text_area("Order Notes", key="notes", height=35, on_change=_mark_override, args=("notes",))
 
     st.divider()
 
@@ -487,32 +461,37 @@ with ticket_col:
         st.text_input("Service", value="SmartOrder AI", disabled=True)
 
     with a2:
-        st.selectbox(
-            f"Executor / Algo Type{_suggested_badge('algo_type')}",
-            options=ALGOS,
-            key="algo_type",
-            on_change=_mark_override,
-            args=("algo_type",),
-        )
+        if _is_suggested("algo_type"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.selectbox("Executor / Algo Type", options=ALGOS, key="algo_type", on_change=_mark_override, args=("algo_type",))
+        else:
+            st.selectbox("Executor / Algo Type", options=ALGOS, key="algo_type", on_change=_mark_override, args=("algo_type",))
 
     with a3:
         st.selectbox("Hold", options=["No", "Yes"], key="hold", on_change=_mark_override, args=("hold",))
 
     with a4:
-        st.time_input(
-            f"Start Time{_suggested_badge('start_time')}",
-            key="start_time",
-            on_change=_mark_override,
-            args=("start_time",),
-        )
+        if _is_suggested("start_time"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.time_input("Start Time", key="start_time", on_change=_mark_override, args=("start_time",))
+        else:
+            st.time_input("Start Time", key="start_time", on_change=_mark_override, args=("start_time",))
 
     with a5:
-        st.time_input(
-            f"End Time{_suggested_badge('end_time')}",
-            key="end_time",
-            on_change=_mark_override,
-            args=("end_time",),
-        )
+        if _is_suggested("end_time"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.time_input("End Time", key="end_time", on_change=_mark_override, args=("end_time",))
+        else:
+            st.time_input("End Time", key="end_time", on_change=_mark_override, args=("end_time",))
 
     st.divider()
 
@@ -522,13 +501,14 @@ with ticket_col:
     # Shared parameters row
     p_shared1, p_shared2 = st.columns([1.2, 1.2], gap="small")
     with p_shared1:
-        st.selectbox(
-            f"Aggression Level{_suggested_badge('aggression_level')}",
-            options=AGGRESSION_LEVELS,
-            key="aggression_level",
-            on_change=_mark_override,
-            args=("aggression_level",),
-        )
+        if _is_suggested("aggression_level"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.selectbox("Aggression Level", options=AGGRESSION_LEVELS, key="aggression_level", on_change=_mark_override, args=("aggression_level",))
+        else:
+            st.selectbox("Aggression Level", options=AGGRESSION_LEVELS, key="aggression_level", on_change=_mark_override, args=("aggression_level",))
     with p_shared2:
         # UX: required in spec; backend already returns urgency_level in context flags
         st.selectbox(
@@ -537,7 +517,6 @@ with ticket_col:
             key="urgency_ui",
             on_change=_mark_override,
             args=("urgency_ui",),
-            help="UI-only. Backend urgency is shown in the explainability panel context flags.",
         )
 
     chosen_algo_ui = st.session_state.get("algo_type", "VWAP")
@@ -545,136 +524,120 @@ with ticket_col:
     if chosen_algo_ui == "VWAP":
         v1, v2 = st.columns([1.2, 1.2], gap="small")
         with v1:
-            st.selectbox(
-                f"Volume Curve{_suggested_badge('vwap_volume_curve')}",
-                options=VWAP_CURVES,
-                key="vwap_volume_curve",
-                on_change=_mark_override,
-                args=("vwap_volume_curve",),
-            )
+            if _is_suggested("vwap_volume_curve"):
+                _s, _m = st.columns([0.06, 0.94])
+                with _s:
+                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+                with _m:
+                    st.selectbox("Volume Curve", options=VWAP_CURVES, key="vwap_volume_curve", on_change=_mark_override, args=("vwap_volume_curve",))
+            else:
+                st.selectbox("Volume Curve", options=VWAP_CURVES, key="vwap_volume_curve", on_change=_mark_override, args=("vwap_volume_curve",))
         with v2:
-            st.number_input(
-                f"Max % of Volume{_suggested_badge('vwap_max_volume_pct')}",
-                min_value=0.0,
-                max_value=100.0,
-                step=1.0,
-                key="vwap_max_volume_pct",
-                on_change=_mark_override,
-                args=("vwap_max_volume_pct",),
-            )
+            if _is_suggested("vwap_max_volume_pct"):
+                _s, _m = st.columns([0.06, 0.94])
+                with _s:
+                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+                with _m:
+                    st.number_input("Max % of Volume", min_value=0.0, max_value=100.0, step=1.0, key="vwap_max_volume_pct", on_change=_mark_override, args=("vwap_max_volume_pct",))
+            else:
+                st.number_input("Max % of Volume", min_value=0.0, max_value=100.0, step=1.0, key="vwap_max_volume_pct", on_change=_mark_override, args=("vwap_max_volume_pct",))
 
     elif chosen_algo_ui == "POV":
         p1, p2, p3 = st.columns([1.2, 1.2, 1.2], gap="small")
         with p1:
-            st.number_input(
-                f"Target Participation %{_suggested_badge('pov_participation_rate')}",
-                min_value=0.0,
-                max_value=1.0,
-                step=0.01,
-                format="%.2f",
-                key="pov_participation_rate",
-                on_change=_mark_override,
-                args=("pov_participation_rate",),
-                help="Expressed as 0.00–1.00 (e.g. 0.10 = 10%).",
-            )
+            if _is_suggested("pov_participation_rate"):
+                _s, _m = st.columns([0.06, 0.94])
+                with _s:
+                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+                with _m:
+                    st.number_input("Target Participation %", min_value=0.0, max_value=1.0, step=0.01, format="%.2f", key="pov_participation_rate", on_change=_mark_override, args=("pov_participation_rate",))
+            else:
+                st.number_input("Target Participation %", min_value=0.0, max_value=1.0, step=0.01, format="%.2f", key="pov_participation_rate", on_change=_mark_override, args=("pov_participation_rate",))
         with p2:
-            st.number_input(
-                f"Min Clip Qty{_suggested_badge('pov_min_clip')}",
-                min_value=0,
-                step=100,
-                key="pov_min_clip",
-                on_change=_mark_override,
-                args=("pov_min_clip",),
-            )
+            if _is_suggested("pov_min_clip"):
+                _s, _m = st.columns([0.06, 0.94])
+                with _s:
+                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+                with _m:
+                    st.number_input("Min Clip Qty", min_value=0, step=100, key="pov_min_clip", on_change=_mark_override, args=("pov_min_clip",))
+            else:
+                st.number_input("Min Clip Qty", min_value=0, step=100, key="pov_min_clip", on_change=_mark_override, args=("pov_min_clip",))
         with p3:
-            st.number_input(
-                f"Max Clip Qty{_suggested_badge('pov_max_clip')}",
-                min_value=0,
-                step=100,
-                key="pov_max_clip",
-                on_change=_mark_override,
-                args=("pov_max_clip",),
-            )
+            if _is_suggested("pov_max_clip"):
+                _s, _m = st.columns([0.06, 0.94])
+                with _s:
+                    st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+                with _m:
+                    st.number_input("Max Clip Qty", min_value=0, step=100, key="pov_max_clip", on_change=_mark_override, args=("pov_max_clip",))
+            else:
+                st.number_input("Max Clip Qty", min_value=0, step=100, key="pov_max_clip", on_change=_mark_override, args=("pov_max_clip",))
 
     elif chosen_algo_ui == "ICEBERG":
-        i1, _i2 = st.columns([1.2, 2.4], gap="small")
-        with i1:
-            st.number_input(
-                f"Display Quantity{_suggested_badge('iceberg_display_quantity')}",
-                min_value=0,
-                step=100,
-                key="iceberg_display_quantity",
-                on_change=_mark_override,
-                args=("iceberg_display_quantity",),
-                help="Suggested display size for ICEBERG (still trader-editable).",
-            )
-        with _i2:
-            st.caption(
-                "Tip: ICEBERG Display Quantity is separate from the optional top-level Display Qty field."
-            )
+        if _is_suggested("iceberg_display_quantity"):
+            _s, _m = st.columns([0.06, 0.94])
+            with _s:
+                st.markdown('<div class="prefill-yellow-strip">&nbsp;</div>', unsafe_allow_html=True)
+            with _m:
+                st.number_input("Display Quantity", min_value=0, step=100, key="iceberg_display_quantity", on_change=_mark_override, args=("iceberg_display_quantity",))
+        else:
+            st.number_input("Display Quantity", min_value=0, step=100, key="iceberg_display_quantity", on_change=_mark_override, args=("iceberg_display_quantity",))
 
     st.divider()
 
-    # Optional: show a compact “final ticket” payload preview for debugging (read-only)
-    with st.expander("Preview: Current Ticket Values (read-only)", expanded=False):
-        preview = {
-            "request_payload": {
-                "client_id": st.session_state["client_id"],
-                "symbol": st.session_state["symbol"],
-                "order_size": int(st.session_state["order_size"]),
-                "direction": st.session_state["direction"],
-                "time_to_close": int(st.session_state["time_to_close"]),
-                "notes": st.session_state.get("notes", "") or "",
-            },
-            "ticket_fields": {
-                "order_type": st.session_state.get("order_type"),
-                "limit_price": st.session_state.get("limit_price"),
-                "time_in_force": st.session_state.get("time_in_force"),
-                "algo_type": st.session_state.get("algo_type"),
-                "hold": st.session_state.get("hold"),
-                "start_time": _time_to_hhmm(st.session_state.get("start_time")),
-                "end_time": _time_to_hhmm(st.session_state.get("end_time")),
-            },
-            "algo_params_ui": {
-                "aggression_level": st.session_state.get("aggression_level"),
-                "urgency_ui": st.session_state.get("urgency_ui"),
-                "vwap": {
-                    "volume_curve": st.session_state.get("vwap_volume_curve"),
-                    "max_volume_pct": st.session_state.get("vwap_max_volume_pct"),
-                },
-                "pov": {
-                    "participation_rate": st.session_state.get("pov_participation_rate"),
-                    "min_clip": st.session_state.get("pov_min_clip"),
-                    "max_clip": st.session_state.get("pov_max_clip"),
-                },
-                "iceberg": {
-                    "display_quantity": st.session_state.get("iceberg_display_quantity"),
-                },
-            },
-        }
-        st.json(preview)
-
-
 with explain_col:
+    # -------- Market Data (Top Right) --------
+    # Only refresh market data when the user changes the symbol, not on Fill All rerun
+    symbol = st.session_state.get("symbol", "AAPL")
+    cache_symbol = st.session_state.get("market_data_symbol")
+    cache = st.session_state.get("market_data_cache")
+    if cache_symbol != symbol or cache is None:
+        try:
+            data_path = Path(__file__).parent / "data" / "market_snapshot.csv"
+            if data_path.exists():
+                df = pd.read_csv(data_path)
+                market_row = df[df["symbol"] == symbol]
+                if not market_row.empty:
+                    m = market_row.iloc[0]
+                    st.session_state["market_data_cache"] = {
+                        "bid": float(m["bid"]), "ask": float(m["ask"]), "ltp": float(m["ltp"]),
+                        "spread": float(m["spread"]), "intraday_vol": float(m["intraday_vol"]),
+                        "last_trade_size": int(m["last_trade_size"]),
+                    }
+                    st.session_state["market_data_symbol"] = symbol
+                else:
+                    st.session_state["market_data_cache"] = None
+                    st.session_state["market_data_symbol"] = symbol
+            else:
+                st.session_state["market_data_cache"] = None
+                st.session_state["market_data_symbol"] = symbol
+        except Exception:
+            st.session_state["market_data_cache"] = None
+            st.session_state["market_data_symbol"] = symbol
+        cache = st.session_state.get("market_data_cache")
+        cache_symbol = st.session_state.get("market_data_symbol")
+
+    st.subheader("🟦 Market Data")
+    if cache is not None and cache_symbol == symbol:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Bid", f"${cache['bid']:.2f}")
+            st.metric("Ask", f"${cache['ask']:.2f}")
+        with col2:
+            st.metric("LTP", f"${cache['ltp']:.2f}")
+            st.metric("Spread", f"${cache['spread']:.2f}")
+        st.caption(f"Vol: {cache['intraday_vol']:.3f} | Last: {int(cache['last_trade_size'])}")
+    else:
+        st.info(f"No market data for {symbol}" if cache_symbol == symbol else "Market data unavailable")
+
+    st.divider()
+
     # -------- SECTION 5 — Explainability Panel (Right / Below) --------
     st.subheader("🟦 Explainability")
-    st.caption("Read-only: why SmartOrder AI suggested these parameters.")
-
     explanations: List[str] = st.session_state.get("explanations", []) or []
     if explanations:
         for e in explanations:
             st.markdown(f"- {e}")
     else:
-        st.info("No explanations yet. Click “Generate Smart Prefill”.")
+        st.info("No explanations yet. Click Fill All.")
 
-    st.divider()
-
-    with st.expander("Context Flags (debug)", expanded=False):
-        st.json(st.session_state.get("context_flags", {}) or {})
-
-    with st.expander("AI Suggested Values (debug)", expanded=False):
-        st.json(st.session_state.get("suggested", {}) or {})
-
-    with st.expander("Trader Overrides (debug)", expanded=False):
-        st.json(st.session_state.get("overrides", {}) or {})
 
